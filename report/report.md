@@ -603,7 +603,7 @@ check_alloc_page() succeeded!
 
 验证完必须把开关改回 `0` 再提交，否则评测的 `[Test 2]` 会因为 `pmm_manager` 不是 `best_fit_pmm_manager` 而失败。
 
-![Buddy System 自测结果](./images/lab2-buddy-check.png)
+![Buddy System 完整启动和五项自测结果（组员环境，OpenSBI v1.8）](./images/lab2-buddy-check-full.jpg)
 
 截图由组员提供，显示其环境选择了 `buddy_system_pmm_manager`，空闲页数为 31929，五项自测均输出 OK。2026-10-25 已合入对应的 `buddy_system_pmm.c/.h` 及管理器验证开关，在 GCC 10.2.0 + QEMU 4.1.1 环境重新编译并复现五项 OK 和 `[buddy test] all buddy checks passed`。切回默认 Best-Fit、清理并重新构建后，课程评分为 `20/20`。组员截图本身未展示 QEMU 版本；本机验证的文字记录见 `验证记录.md`。
 
@@ -659,6 +659,10 @@ phys_addr   = 0x80200000
 ```
 
 返回值 `0` 表示翻译成功，且：
+
+2026-10-25 答辩前重新演练时，再次命中地址翻译函数并得到相同结果。Host GDB 放行后，RISC-V GDB 的 `x/8i $pc` 返回内核指令，证明本次远程读取请求已经完成。
+
+![答辩前双 GDB 复演：地址翻译成功并返回指令](./images/lab2-gdb-rehearsal.png)
 
 ```text
 0xffffffffc0200000 - 0x80200000 = 0xffffffff40000000
