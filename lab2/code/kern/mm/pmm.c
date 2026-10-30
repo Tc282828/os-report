@@ -1,5 +1,6 @@
 #include <default_pmm.h>
 #include <best_fit_pmm.h>
+#include <buddy_system_pmm.h>
 #include <defs.h>
 #include <error.h>
 #include <memlayout.h>
@@ -33,8 +34,16 @@ const struct pmm_manager *pmm_manager;
 static void check_alloc_page(void);
 
 // init_pmm_manager - initialize a pmm_manager instance
+/* lab2 function2-3 2511203: default Best-Fit; enable Buddy for separate checks. */
+#ifndef LAB2_VERIFY_BUDDY_PMM
+#define LAB2_VERIFY_BUDDY_PMM 0
+#endif
 static void init_pmm_manager(void) {
+#if LAB2_VERIFY_BUDDY_PMM
+    pmm_manager = &buddy_system_pmm_manager;
+#else
     pmm_manager = &best_fit_pmm_manager;
+#endif
     cprintf("memory management: %s\n", pmm_manager->name);
     pmm_manager->init();
 }
@@ -61,7 +70,7 @@ size_t nr_free_pages(void) {
     return pmm_manager->nr_free_pages();
 }
 
-//lab2 function1 YOUR CODE
+//lab2 function1 2510582
 static void page_init(void) {
     extern char end[];
 
