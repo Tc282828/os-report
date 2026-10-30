@@ -62,10 +62,10 @@ export GCCPREFIX=/home/lenovo/tools/Risc-V/riscv64-unknown-elf-toolchain-10.2.0-
 export QEMU=/home/lenovo/src/qemu-4.1.1/build/riscv64-softmmu/qemu-system-riscv64
 
 # 构建内核。
-make -j2
+make GCCPREFIX="$GCCPREFIX" -j2
 
 # 启动 QEMU；Makefile 中 -s 提供默认 1234 调试端口，-S 暂停客体 CPU。
-make debug
+make GCCPREFIX="$GCCPREFIX" QEMU="$QEMU" debug
 ```
 
 左边不返回 shell 提示符是正常的，因为 QEMU 正在前台运行。
