@@ -34,9 +34,7 @@ const struct pmm_manager *pmm_manager;
 static void check_alloc_page(void);
 
 // init_pmm_manager - initialize a pmm_manager instance
-/* lab2 function2-3 2511203
- * Default: Best-Fit for course grading. Verify Buddy with
- * make DEFS=-DLAB2_VERIFY_BUDDY_PMM=1 after cleaning build outputs. */
+/* lab2 function2-3 2511203: default Best-Fit; enable Buddy for separate checks. */
 #ifndef LAB2_VERIFY_BUDDY_PMM
 #define LAB2_VERIFY_BUDDY_PMM 0
 #endif
