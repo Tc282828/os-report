@@ -1054,7 +1054,17 @@ Total Score: 20/20
 
 ![DTB 内存探测与 page_init 初始化成功](./images/模块一/01_DTB内存探测与page_init初始化成功.png)
 
-此图证明本次内核初始化和页面分配自测通过。上面的 `20/20` 是此前评分记录，本次文档合并没有重新评分，最终评分截图仍待补充；该成绩也不单独证明 Buddy 自测通过。
+此图展示内核初始化和页面分配自测结果。合入 Buddy、SLUB 后，在 VS Code 的 WSL 终端使用课程裸机工具链和 QEMU 4.1.1 执行课程 `make grade`，结果如下：
+
+```text
+check page init: OK
+check best fit:  OK
+Total Score: 20/20
+```
+
+![最终代码的课程 make grade 结果](./images/lab2-make-grade.png)
+
+评分命令显式传入 `GCCPREFIX` 和 `QEMU`，终端显示 `lab2 injection complete`，两项评分均为 OK。该成绩验证课程规定的 Page Init 与 Best-Fit 检查；Buddy 和 SLUB 的专项测试结果另见自测章节。
 
 ### 5.2 任务三（Buddy System）的单独验证
 
@@ -1228,10 +1238,10 @@ OS 原理中重要、但本模块尚未完整覆盖的内容包括：NUMA 拓扑
 
 本次合入成员三提供的 Buddy、SLUB 和测试设计，保留模块一 page_init、Best-Fit 实现和 QEMU 4.1.1 配置。组员的 lab2-grade-local.png 来自自编 grade_new_qemu.sh，仅作为其环境下的自查记录，不能代替课程 make grade。
 
-当前合并版本的课程 make grade 由组长在 VS Code 执行；正式评分截图尚未补入。历史 20/20 不代表已对本次新增 SLUB 的最终代码重新评分。
+合并后的最终代码已在 VS Code 中执行课程 make grade，两项检查均为 OK，总分 20/20，截图见 5.1 节。
 
 SLUB 不支持非法指针、重复释放、并发和有存活对象时重新初始化。对象仅保证至少 8 字节对齐，不能宣称所有档位都按自身大小对齐。直通分配新增加法与页对齐溢出检查；对应自测加入 SIZE_MAX 附近请求、free(NULL) 和 2048/2049 档位切换。
 
 更详细的测试覆盖与限制见 [Buddy 与 SLUB 合并检查](./Buddy与SLUB合并检查.md)。
 
-2026-10-30 合并预检：Best-Fit + SLUB 和 Buddy + SLUB 均编译并启动自测通过，详细输出见合并检查及其日志；课程 make grade 尚未重跑。
+2026-10-30 合并预检：Best-Fit + SLUB 和 Buddy + SLUB 均编译并启动自测通过，详细输出见合并检查及其日志；最终代码的课程 make grade 已通过，成绩为 20/20。

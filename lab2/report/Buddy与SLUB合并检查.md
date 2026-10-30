@@ -22,7 +22,7 @@
 - SLUB 混合负载使用固定种子的伪随机序列，是有限样例。代码不是每次操作均调用结构检查。
 - SLUB 释放未经登记的大对象指针时直接读取头部；非法指针可能先产生访问异常，不能承诺必然被 magic 断言安全拦截。重复释放也不受支持。
 - slub_init 的重入前提是没有存活分配。当前测试仅在空 cache 上重建；没有并发、抢占或 SMP 支持。
-- 自测成功不代表所有边界都被覆盖。课程 make grade 仍由组长在 VS Code 运行并补正式截图。
+- 自测覆盖范围见上述限制。课程 make grade 已通过，不能用课程评分代替 Buddy、SLUB 专项测试。
 
 ## 验证
 
@@ -33,8 +33,10 @@
 - 测试末尾均检查页数及结构恢复；随后已重新构建默认 Best-Fit。
 - 每次启动观察 8 秒；测试完成后内核进入循环，由 timeout 结束模拟机，终止信息不表示自测失败。
 - 构建时有 Windows/WSL 文件时间差导致的 Clock skew 警告，但链接和启动自测均完成。
-- **没有运行课程 make grade。正式评分和截图仍由组长在 VS Code 完成。**
+- 最终代码已在 VS Code 中执行课程 `make grade`，Page Init 和 Best-Fit 均为 OK，总分 20/20。
 
 原始启动日志：[Best-Fit + SLUB](./logs/20261030-bestfit-slub.txt)、[Buddy + SLUB](./logs/20261030-buddy-slub.txt)。
 
 评分时须通过 make 命令行显式指定 GCCPREFIX（原 Makefile 的赋值会覆盖同名环境变量）。
+
+![课程 make grade 结果](./images/lab2-make-grade.png)
