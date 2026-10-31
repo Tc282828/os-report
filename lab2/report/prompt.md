@@ -75,7 +75,6 @@ Requirements:
 
 模仿kern/mm/default_pmm.c ，其中初始化、登记空闲页、分配、释放、查询剩余页数的五个函数都保留，函数名加 best_fit_前缀。文件里原有的两个测试函数不要动，也不要复制。
 只改分配：first-fit 是找到第一个够大的就 break，best-fit 要把整条链表扫完，选够大的里面最小的，大小一样就选地址低的。不要留 break。
-注意default_pmm.c 里“插到链表最后”的分支少了一个 break，会把前驱指针指到自己，复制过来的时候补上。
 文件末尾加管理器 best_fit_pmm_manager，检查函数用文件里现成的那个。
 改 kern/mm/pmm.c 里初始化管理器那一行，换成新的。
 其他文件不要动，page_init不用管。
