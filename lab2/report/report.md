@@ -1,6 +1,6 @@
 # 实验报告
 
-本轮更新了 Buddy、SLUB 测试及启动配置。组员的 QEMU 10.2.1 自测已通过；本文保留的 QEMU 4.1.1 评分截图对应修改前版本。
+新版已在课程裸机 GCC 10.2.0、QEMU 4.1.1 环境完成验证：Best-Fit 配合 SLUB 九项自测通过；Buddy 五项及 SLUB 九项自测通过；切回 Best-Fit 后，课程 `make grade` 两项均为 OK，总分 20/20。
 
 ## 实验基本信息
 
@@ -566,7 +566,7 @@ check_alloc_page() succeeded!
 
 验证完必须把开关改回 `0` 再提交，否则评测的 `[Test 2]` 会因为 `pmm_manager` 不是 `best_fit_pmm_manager` 而失败。
 
-下图是组员使用脚本 `grade_new_qemu.sh` 得到的本地自查结果；该脚本已随仓库提交在 `tools/grade_new_qemu.sh`，使用 `-kernel` 启动并调用课程的 `tools/inject.py`。当前仓库的复现命令采用 5.1 节的 `make GCCPREFIX="$RISCV_PREFIX" QEMU="$QEMU_411" grade`，修改前版本的课程评分为 20/20。
+下图是组员使用脚本 `grade_new_qemu.sh` 得到的本地自查结果；该脚本已随仓库提交在 `tools/grade_new_qemu.sh`，使用 `-kernel` 启动并调用课程的 `tools/inject.py`。当前仓库的复现命令采用 5.1 节的 `make GCCPREFIX="$RISCV_PREFIX" QEMU="$QEMU_411" grade`，新版代码的课程评分为 20/20。
 
 ```text
 [Test 1] Page Init: PASS
@@ -960,7 +960,7 @@ Total Score: 20/20
 
 ![DTB 内存探测与 page_init 初始化成功](./images/模块一/01_DTB内存探测与page_init初始化成功.png)
 
-此图记录加强测试用例之前，在 VS Code 的 WSL 终端使用课程裸机工具链与 QEMU 4.1.1 执行课程 `make grade` 的结果：
+加强测试用例后的代码，在 VS Code 的 WSL 终端使用课程裸机工具链与 QEMU 4.1.1 执行课程 `make grade`，结果如下：
 
 ```text
 check page init: OK
@@ -968,7 +968,7 @@ check best fit:  OK
 Total Score: 20/20
 ```
 
-![修改前版本的课程 make grade 结果](./images/lab2-make-grade.png)
+![新版课程 make grade 结果](./images/lab2-1031-make-grade.png)
 
 评分命令显式传入 `GCCPREFIX` 和 `QEMU`，终端显示 `lab2 injection complete`，两项评分均为 OK。该成绩验证课程规定的 Page Init 与 Best-Fit 检查；Buddy 和 SLUB 的专项测试结果另见自测章节。
 
@@ -1142,3 +1142,20 @@ First-Fit、Best-Fit 和 Buddy 通过同一个 `pmm_manager` 接口工作，但�
 实现完成后仍要核对源码和运行输出。启动无输出时，通过比较反汇编定位到工具链产生的 GOT/PIC 寻址问题，随后改用课程裸机工具链。修改前版本的 Page Init 和 Best-Fit 课程评分为 20/20，Buddy 和 SLUB 另用自带测试验证。
 
 测试也需要明确检查条件。一次通过只能说明所测样例满足断言，不能据此判断所有内存布局、非法释放和并发情况都正确。
+
+## 新版在 QEMU 4.1.1 下的测试结果
+
+使用课程裸机 GCC 10.2.0，在 VS Code 的 WSL 终端运行：
+
+| 配置 | 结果 | 初始空闲页数 |
+| --- | --- | --- |
+| Best-Fit + SLUB | SLUB 九项通过 | 31927 |
+| Buddy + SLUB | Buddy 五项、SLUB 九项通过 | 31927 |
+
+![Best-Fit 与 SLUB 自测](./images/lab2-1031-bestfit-slub.png)
+
+![Buddy 与 SLUB 自测](./images/lab2-1031-buddy-slub.png)
+
+执行 `tools/restore_best_fit.sh` 恢复默认 Best-Fit 后，课程 `make grade` 的 Page Init 和 Best-Fit 均为 OK，总分 20/20。
+
+![课程评分](./images/lab2-1031-make-grade.png)

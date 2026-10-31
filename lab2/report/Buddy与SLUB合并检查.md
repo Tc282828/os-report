@@ -20,21 +20,20 @@ SLUB 在页分配器之上设置九个对象档位，最大档位为 2048 字节
 - SLUB 不支持非法指针和重复释放。对不属于 slab 的指针，代码会读取大对象头部；非法指针可能先触发访问异常，不能保证被 magic 断言拦截。
 - `slub_init()` 只能在没有存活对象时重新调用。当前实现没有并发、抢占或 SMP 支持。
 
-## 测试结果
 
-以下为加强测试用例之前，使用课程裸机 GCC 10.2.0 和 QEMU 4.1.1 的运行结果：
+## 新版在 QEMU 4.1.1 下的测试结果
+
+使用课程裸机 GCC 10.2.0，在 VS Code 的 WSL 终端运行：
 
 | 配置 | 结果 | 初始空闲页数 |
 | --- | --- | --- |
-| Best-Fit + SLUB | SLUB 九项通过 | 31928 |
+| Best-Fit + SLUB | SLUB 九项通过 | 31927 |
 | Buddy + SLUB | Buddy 五项、SLUB 九项通过 | 31927 |
 
-两种配置的代码和数据段大小不同，空闲区起点分别为 `0x80348000` 和 `0x80349000`。自测结束后，页数和结构均恢复；测试结束后内核进入循环，由 `timeout` 终止模拟机。
+![Best-Fit 与 SLUB 自测](./images/lab2-1031-bestfit-slub.png)
 
-启动输出：[Best-Fit + SLUB](./logs/20261030-bestfit-slub.txt)、[Buddy + SLUB](./logs/20261030-buddy-slub.txt)。
+![Buddy 与 SLUB 自测](./images/lab2-1031-buddy-slub.png)
 
-修改前版本执行课程 `make grade`，Page Init 和 Best-Fit 均为 OK，总分 20/20。课程评分与 Buddy、SLUB 专项自测分别记录。
+执行 `tools/restore_best_fit.sh` 恢复默认 Best-Fit 后，课程 `make grade` 的 Page Init 和 Best-Fit 均为 OK，总分 20/20。
 
-![课程 make grade 结果](./images/lab2-make-grade.png)
-
-新版测试在组员的 QEMU 10.2.1 环境中通过，见 [新版自测日志](./logs/20261031-selftest.log)。旧截图与旧日志不用于证明新增测试的执行结果。
+![课程评分](./images/lab2-1031-make-grade.png)
