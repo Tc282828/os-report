@@ -56,13 +56,15 @@
 cd /mnt/d/OS/os-report/lab2/code
 
 # 使用课程的裸机 RISC-V 编译工具链。
+# 注意：Makefile 内部对 GCCPREFIX 有赋值，所以必须用命令行变量传入，
+# 只 export 而不在命令行给出会被 Makefile 的赋值覆盖掉。
 export GCCPREFIX=/home/lenovo/tools/Risc-V/riscv64-unknown-elf-toolchain-10.2.0-2020.12.8-x86_64-linux-ubuntu14/bin/riscv64-unknown-elf-
 
 # 使用带调试符号、与下面源码行号对应的 QEMU 4.1.1。
 export QEMU=/home/lenovo/src/qemu-4.1.1/build/riscv64-softmmu/qemu-system-riscv64
 
-# 构建内核。
-make GCCPREFIX="$GCCPREFIX" -j2
+# 构建内核（GCCPREFIX/QEMU 都以命令行变量形式传入，避免被 Makefile 覆盖）。
+make GCCPREFIX="$GCCPREFIX" QEMU="$QEMU" -j2
 
 # 启动 QEMU；Makefile 中 -s 提供默认 1234 调试端口，-S 暂停客体 CPU。
 make GCCPREFIX="$GCCPREFIX" QEMU="$QEMU" debug

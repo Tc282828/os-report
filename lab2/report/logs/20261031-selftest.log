@@ -1,0 +1,97 @@
+
+======== 0. 环境 ========
+  gcc    : riscv64-unknown-elf-gcc (14.2.0+19) 14.2.0
+  qemu   : QEMU emulator version 10.2.1 (Debian 1:10.2.1+ds-1ubuntu3.2)
+  make   : GNU Make 4.4.1
+  python3: Python 3.14.4
+  目录   : /mnt/c/Users/27281/Desktop/Fundamentals of Computer System Software/lab-2/selftest_1031
+
+======== 0b. 启动页表自检（entry.S） ========
+  [PASS] entry.S 含低地址恒等映射（索引 2）
+
+======== 1. 提交态（Best-Fit）编译 ========
+
+======== 编译：Best-Fit 提交态 ========
+  [PASS] 编译通过（最后一行：riscv64-unknown-elf-objcopy bin/kernel --strip-all -O binary bin/ucore.img）
+
+======== 2. 提交态运行：SLUB 九行 ========
+qemu-system-riscv64: terminating on signal 15 from pid 743 (timeout)
+  QEMU 退出码 124（124 表示超时被杀，内核跑完不会自己退出，属正常）
+  [slub] 用例行数 = 9（应为 9）
+  [PASS] 九个 SLUB 用例都打印了 OK
+[slub] basic alloc/free ............ OK
+[slub] size class selection ........ OK
+[slub] slab grow on demand ......... OK
+[slub] free then reuse ............. OK
+[slub] no leak after mixed free ..... OK
+[slub] neighbour guard ............. OK
+[slub] mixed random workload ....... OK
+[slub] invalid & oversized request .. OK
+[slub] cache re-init ................ OK
+  [PASS] all slub checks passed
+  [PASS] 管理器是 best_fit（提交态正确）
+  空闲页数不是 31928（内核体积变了就会变，不一定是错）
+
+======== 3. 切到 Buddy 自测态 ========
+  39:#define LAB2_VERIFY_BUDDY_PMM 1
+
+======== 编译：Buddy 自测态 ========
+  [PASS] 编译通过（最后一行：riscv64-unknown-elf-objcopy bin/kernel --strip-all -O binary bin/ucore.img）
+
+======== 4. Buddy 自测运行：五行 ========
+qemu-system-riscv64: terminating on signal 15 from pid 898 (timeout)
+  QEMU 退出码 124（124 表示超时被杀，内核跑完不会自己退出，属正常）
+  [buddy] 用例行数 = 5（应为 5）
+  [PASS] 五个 Buddy 用例都打印了 OK
+  [buddy] single page alloc/free .......... OK
+  [buddy] power-of-two granularity ........ OK
+  [buddy] split & merge .................. OK
+  [buddy] over-size request rejected ...... OK
+  [buddy] bulk alloc/free until exhausted  OK
+  [PASS] all buddy checks passed
+  [PASS] 管理器是 buddy
+  空闲页数不是 31929（内核体积变了就会变，不一定是错）
+[buddy test] buddy_system_pmm_manager self-test, free pages = 31927
+  [buddy] single page alloc/free .......... OK
+  [buddy] power-of-two granularity ........ OK
+  [buddy] split & merge .................. OK
+  [buddy] over-size request rejected ...... OK
+  [buddy] bulk alloc/free until exhausted  OK
+[buddy test] all buddy checks passed
+
+======== 5. 改回提交态（开关 = 0） ========
+  [PASS] 开关已回到 0
+
+======== 编译：回到提交态 ========
+  [PASS] 编译通过（最后一行：riscv64-unknown-elf-objcopy bin/kernel --strip-all -O binary bin/ucore.img）
+
+======== 6. 本地等价评分（非官方，只作参考） ========
+[1/5] 编译当前工程
+[2/5] 复制工程并注入课程测试（tools/inject.py，与 make grade 同一步骤）
+lab2 injection complete
+[3/5] 编译注入后的内核
+[4/5] 启动 QEMU（-kernel 方式），15 秒后自动结束
+[5/5] 统计结果
+
+===== 关键输出 =====
+memory management: best_fit_pmm_manager
+physical memory: [0x0000000080000000, 0x0000000088000000)
+free physical memory: [0x0000000080349000, 0x0000000088000000)
+check_alloc_page() succeeded!
+[Test 1] Page Init: PASS
+[Test 2] Best-Fit: PASS
+
+check page init: OK      (10/10)
+check best fit:  OK      (10/10)
+
+Total Score: 20/20
+
+（本地等价评分，用于自查；官方结果请在 QEMU 4.1.1 上执行 make grade）
+（完整串口日志：/tmp/lab2_grade_local/.serial.out）
+  看过日志里的 Total Score 即可
+
+======== 汇总 ========
+  全部检查通过。
+  日志：/mnt/c/Users/27281/Desktop/Fundamentals of Computer System Software/lab-2/selftest_1031/selftest-20261031-010328.log
+  串口：serial-bestfit-20261031-010328.txt / serial-buddy-20261031-010328.txt（若已生成）
+  把上面这些文件发回来即可。

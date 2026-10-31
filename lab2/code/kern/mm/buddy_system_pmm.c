@@ -55,6 +55,17 @@ static bool buddy_is_power_of_two(size_t x) {
     return x != 0 && (x & (x - 1)) == 0;
 }
 
+/* 把请求页数换算成阶，并顺带判定"是否超过单块上限"。
+ *
+ * Buddy 一次只能切出 2^order 页，而 order 被 BUDDY_MAX_ORDER 截断，所以超过
+ * 2^BUDDY_MAX_ORDER 页的请求虽然可能小于 nr_free，仍然必须拒绝。把这个判定
+ * 单独成一个函数，测试才能在没有 2 GiB 内存的机器上直接验证这条分支。 */
+static unsigned int buddy_order_for_request(size_t n, bool *too_large) {
+    unsigned int order = buddy_order_of(n);
+    *too_large = (buddy_pages_of_order(order) < n);
+    return order;
+}
+
 /* ---------- 空闲块链表操作 ---------- */
 
 /* 把 base 作为第 order 阶的空闲块头页挂到对应链表（不计入 nr_free） */
@@ -109,9 +120,10 @@ static struct Page *buddy_alloc_pages(size_t n) {
     if (n > buddy_area.nr_free) {
         return NULL;
     }
-    unsigned int order = buddy_order_of(n);
-    if (buddy_pages_of_order(order) < n) {
-        return NULL;  /* 超过单块上限 */
+    bool too_large = 0;
+    unsigned int order = buddy_order_for_request(n, &too_large);
+    if (too_large) {
+        return NULL;  /* 超过单块上限（2^BUDDY_MAX_ORDER 页） */
     }
 
     /* 找第一个有块的阶 */
@@ -191,6 +203,29 @@ static size_t buddy_nr_free_pages(void) {
 
 /* ---------- 自带的测试函数（任务三第二份 prompt 的产物） ---------- */
 
+/* 统计某一阶的空闲块个数（测试用） */
+static unsigned int buddy_count_blocks(unsigned int order) {
+    unsigned int count = 0;
+    list_entry_t *head = &buddy_area.free_list[order];
+    list_entry_t *le = head;
+    while ((le = list_next(le)) != head) {
+        count++;
+    }
+    return count;
+}
+
+/* 判断某个页是否正作为第 order 阶空闲块的头页挂在链表上（测试用） */
+static bool buddy_free_list_contains(struct Page *target, unsigned int order) {
+    list_entry_t *head = &buddy_area.free_list[order];
+    list_entry_t *le = head;
+    while ((le = list_next(le)) != head) {
+        if (le2page(le, page_link) == target) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 /* 遍历所有阶的空闲链表：检查块头状态、块大小与所在阶一致、块按自身大小对齐，
  * 并返回所有空闲块的页数之和，用于与 nr_free 对账。 */
 static unsigned int buddy_sum_free_pages(void) {
@@ -250,8 +285,8 @@ static void buddy_order_check(void) {
     cprintf("  [buddy] power-of-two granularity ........ OK\n");
 }
 
-/* 测试 3：分裂与合并。整块分配/释放后页数应还原；把最大块切成两半再分别释放，
- * 伙伴块应重新合并成一个整块，于是整块的请求能够再次成功。 */
+/* 测试 3：分裂与合并。整块分配/释放后页数应还原；再让一次单页申请把某个高阶块
+ * 一路分裂到底，逐级确认每一级的伙伴块都空闲在对应阶链表上，释放后各阶分布复原。 */
 static void buddy_split_merge_check(void) {
     unsigned int free_before = buddy_area.nr_free;
 
@@ -270,37 +305,104 @@ static void buddy_split_merge_check(void) {
     free_pages(p, size);
     assert(buddy_area.nr_free == free_before);
 
-    /* 3.2 把最大的空闲块切成两半，分别释放后应合并回整块 */
-    unsigned int top = BUDDY_MAX_ORDER;
-    while (top > 0 && list_empty(&buddy_area.free_list[top])) {
-        top--;
+    /* 3.2 逐级合并：先把现成的 0 阶块借走（1 页构型里确实存在这样一块），否则
+     * alloc_page() 会直接取走它、根本不发生分裂。借完之后再分配 1 页，必然从某个
+     * 高阶块一路分裂下来——分裂时挂回链表的另一半，就是它在该级的伙伴。
+     * 逐级核对"每一级的伙伴都在对应阶链表上、阶数正确"，再释放，要求各阶块数
+     * 分布完全复原：只有合并一路级联回原来的高阶块，分布才会复原。所以这一条
+     * 同时验证"伙伴关系"与"逐级合并"，不依赖"两次分配刚好拿到同一父块"这种运气。 */
+    unsigned int cnt_orig[BUDDY_MAX_ORDER + 1];
+    unsigned int cnt_before[BUDDY_MAX_ORDER + 1];
+    unsigned int cnt_now[BUDDY_MAX_ORDER + 1];
+    for (order = 0; order <= BUDDY_MAX_ORDER; order++) {
+        cnt_orig[order] = buddy_count_blocks(order);
     }
-    if (top > 0) {
-        size_t half = buddy_pages_of_order(top) >> 1;
-        struct Page *a = alloc_pages(half);
-        struct Page *b = alloc_pages(half);
-        assert(a != NULL && b != NULL && a != b);
-        assert(buddy_area.nr_free == free_before - 2 * half);
 
-        free_pages(a, half);
-        free_pages(b, half);
-        assert(buddy_area.nr_free == free_before);
-        assert(buddy_sum_free_pages() == buddy_area.nr_free);
-
-        struct Page *c = alloc_pages(buddy_pages_of_order(top));  /* 已合并成整块 */
-        assert(c != NULL);
-        free_pages(c, buddy_pages_of_order(top));
-        assert(buddy_area.nr_free == free_before);
+    struct Page *pinned[8];
+    unsigned int npinned = 0;
+    while (npinned < 8 && buddy_count_blocks(0) > 0) {
+        pinned[npinned] = alloc_page();
+        assert(pinned[npinned] != NULL);
+        npinned++;
     }
+    assert(buddy_count_blocks(0) == 0);          /* 0 阶已经清空，下一次必然分裂 */
+    assert(buddy_area.nr_free == free_before - npinned);
+    for (order = 0; order <= BUDDY_MAX_ORDER; order++) {
+        cnt_before[order] = buddy_count_blocks(order);
+    }
+
+    struct Page *one = alloc_page();
+    assert(one != NULL);
+    assert(buddy_area.nr_free == free_before - npinned - 1);
+
+    /* 这次分裂的起点阶：唯一一个块数减少 1 的阶 */
+    unsigned int split = BUDDY_MAX_ORDER + 1;
+    for (order = 0; order <= BUDDY_MAX_ORDER; order++) {
+        cnt_now[order] = buddy_count_blocks(order);
+        if (cnt_now[order] + 1 == cnt_before[order]) {
+            assert(split > BUDDY_MAX_ORDER);   /* 至多一个阶减少 1 */
+            split = order;
+        }
+    }
+    assert(split >= 1 && split <= BUDDY_MAX_ORDER);   /* 0 阶已清空，必然分裂 */
+
+    size_t p_idx = (size_t)(one - pages);
+    unsigned int k;
+    for (k = 0; k < split; k++) {
+        size_t size_k = buddy_pages_of_order(k);
+        size_t parent = p_idx & ~((size_k << 1) - 1);   /* 这一级的父块起点 */
+        size_t sib_idx = parent + ((p_idx & size_k) ? 0 : size_k);  /* 父块的另一半 */
+        struct Page *sib = pages + sib_idx;
+        assert(sib_idx < (size_t)(npage - nbase));
+        assert((size_t)sib->property == size_k);
+        assert(buddy_free_list_contains(sib, k));       /* 伙伴块确实空闲着 */
+    }
+
+    free_page(one);
+    assert(buddy_area.nr_free == free_before - npinned);
+    for (order = 0; order <= BUDDY_MAX_ORDER; order++) {
+        assert(buddy_count_blocks(order) == cnt_before[order]);
+    }
+
+    /* 把借走的 0 阶块还回去，各阶分布应回到进入 3.2 之前的样子 */
+    for (k = 0; k < npinned; k++) {
+        free_page(pinned[k]);
+    }
+    assert(buddy_area.nr_free == free_before);
+    for (order = 0; order <= BUDDY_MAX_ORDER; order++) {
+        assert(buddy_count_blocks(order) == cnt_orig[order]);
+    }
+    assert(buddy_sum_free_pages() == buddy_area.nr_free);
     cprintf("  [buddy] split & merge .................. OK\n");
 }
 
-/* 测试 4：超过任一空闲块的请求必须失败，且不改变空闲页数 */
+/* 测试 4：越界请求必须失败，且不改变空闲页数。
+ *
+ * 这里有两个不同的"拒绝"分支：
+ *   a) 请求页数 > nr_free —— 在 128 MiB 机器上能真实触发；
+ *   b) 单块上限（请求 > 2^BUDDY_MAX_ORDER 页）—— 本机可用页数约 3.2 万，
+ *      远小于 2^19 页，"超上限"的请求一定同时超 nr_free，走不到这一支。
+ * 因此 (b) 改成直接调用 buddy_order_for_request() 断言它的判定结果，等于把
+ * 这条分支从 alloc 里单独提出来测：2^19 页合法，(2^19)+1 页必须判为超限。 */
 static void buddy_limit_check(void) {
     unsigned int free_before = buddy_area.nr_free;
+    size_t max_block = buddy_pages_of_order(BUDDY_MAX_ORDER);
+    bool too_large = 0;
 
-    assert(alloc_pages(npage - nbase) == NULL);   /* 比全部受管物理页还大 */
+    /* a) 超过全部空闲页 */
+    assert(alloc_pages(npage - nbase) == NULL);
     assert(alloc_pages(buddy_area.nr_free + 1) == NULL);
+
+    /* b) 单块上限：阶计算的边界 */
+    assert(buddy_order_for_request(1, &too_large) == 0 && !too_large);
+    assert(buddy_order_for_request(3, &too_large) == 2 && !too_large);
+    assert(buddy_order_for_request(max_block, &too_large) == BUDDY_MAX_ORDER);
+    assert(!too_large);                              /* 正好 2^19 页仍然合法 */
+    assert(buddy_order_for_request(max_block + 1, &too_large) == BUDDY_MAX_ORDER);
+    assert(too_large);                               /* 多 1 页就必须拒绝 */
+
+    /* 公共接口对超上限请求同样返回 NULL，且状态不变 */
+    assert(alloc_pages(max_block + 1) == NULL);
     assert(buddy_area.nr_free == free_before);
     assert(buddy_sum_free_pages() == buddy_area.nr_free);
     cprintf("  [buddy] over-size request rejected ...... OK\n");

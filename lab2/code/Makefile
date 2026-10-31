@@ -33,6 +33,8 @@ CC		:= $(GCCPREFIX)gcc
 CFLAGS  := -mcmodel=medany -std=gnu99 -Wno-unused -Werror 
 CFLAGS	+= -fno-builtin -Wall -O2 -nostdinc $(DEFS)
 CFLAGS	+= -fno-stack-protector -ffunction-sections -fdata-sections
+# 禁用 small-data 寻址，避免依赖尚未初始化的 gp。
+CFLAGS	+= -msmall-data-limit=0
 CFLAGS	+= -g
 CFLAGS2 = $(CFLAGS) -D ucore_test
 CTYPE	:= c S

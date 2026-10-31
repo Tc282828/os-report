@@ -490,41 +490,83 @@ static void slub_guard_check(void) {
     cprintf("[slub] neighbour guard ............. OK\n");
 }
 
-/* 7. 混合负载：随机大小、随机顺序释放，最终必须完全归还 */
+/* 7. 混合负载：先做一轮"固定覆盖"，再跑随机分配/释放。
+ *
+ * 只用随机数决定尺寸会漏覆盖：旧写法每步连续取两个随机状态、分别 `% 8` 和
+ * `% 6`，而 LCG 的相邻状态在低位高度相关，尺寸与槽位被绑成两族，实测 8、
+ * 600、5000 三个尺寸一次都没被选中，八个槽位也只用到 0/2/4/6。换成换种子
+ * 解决不了这个结构性问题，所以改成"固定阶段保证覆盖 + 随机阶段制造交织"，
+ * 并把覆盖情况用计数器断言钉死。 */
 static void slub_mixed_check(void) {
     size_t free_before = nr_free_pages();
     const size_t sizes[6] = {8, 100, 600, 2049, 5000, 12};
     void *ring[8];
     size_t ring_size[8];
-    int small_filled = 0;  // 走 slab 的对象数，用于与 cache 计数对账
+    unsigned int size_hit[6] = {0};   // 每个尺寸被申请的次数
+    unsigned int slot_hit[8] = {0};   // 每个槽位被使用的次数
+    size_t small_filled = 0;          // 走 slab 的对象数，用于与 cache 计数对账
 
     for (int i = 0; i < 8; i++) {
         ring[i] = NULL;
         ring_size[i] = 0;
     }
 
+    /* 阶段 1：固定覆盖。八个槽位各取一个对象、六个尺寸轮流使用，
+     * 使"每个尺寸至少申请过一次、每个槽位至少用过一次"不依赖随机数的运气。 */
+    for (int i = 0; i < 8; i++) {
+        int pick = i % 6;
+        ring[i] = slub_alloc(sizes[pick]);
+        assert(ring[i] != NULL);
+        ring_size[i] = sizes[pick];
+        slot_hit[i]++;
+        size_hit[pick]++;
+        if (sizes[pick] <= SLUB_MAX_OBJECT) {
+            small_filled++;
+        }
+        assert(slub_structure_ok());
+        assert(slub_nr_inuse_objects() == small_filled);
+    }
+    for (int i = 0; i < 6; i++) {
+        assert(size_hit[i] >= 1);     // 六个尺寸都覆盖到了
+    }
+    for (int i = 0; i < 8; i++) {
+        assert(slot_hit[i] >= 1);     // 八个槽位都用到了
+    }
+
+    /* 阶段 2：随机负载。每步只取一次随机数，槽位与尺寸分别取它的不同位段，
+     * 避免两个连续状态之间的低位相关。 */
     for (int step = 0; step < 200; step++) {
-        int slot = (int)(slub_next_rand() % 8);
-        int pick = (int)(slub_next_rand() % 6);
+        unsigned long r = slub_next_rand();
+        int slot = (int)((r >> 13) % 8);
+        int pick = (int)((r >> 37) % 6);
 
         if (ring[slot] != NULL) {
+            /* 释放分支也要检查：结构与对象计数在释放之后同样必须成立 */
+            size_t sz = ring_size[slot];
             slub_free(ring[slot]);
             ring[slot] = NULL;
-            if (ring_size[slot] <= SLUB_MAX_OBJECT) {
+            ring_size[slot] = 0;
+            if (sz <= SLUB_MAX_OBJECT) {
                 small_filled--;
             }
-            ring_size[slot] = 0;
-            continue;
-        }
-        ring[slot] = slub_alloc(sizes[pick]);
-        assert(ring[slot] != NULL);
-        ring_size[slot] = sizes[pick];
-        if (ring_size[slot] <= SLUB_MAX_OBJECT) {
-            small_filled++;
+        } else {
+            ring[slot] = slub_alloc(sizes[pick]);
+            assert(ring[slot] != NULL);
+            ring_size[slot] = sizes[pick];
+            slot_hit[slot]++;
+            size_hit[pick]++;
+            if (sizes[pick] <= SLUB_MAX_OBJECT) {
+                small_filled++;
+            }
         }
 
         assert(slub_structure_ok());
-        assert(slub_nr_inuse_objects() == (size_t)small_filled);
+        assert(slub_nr_inuse_objects() == small_filled);
+    }
+
+    /* 随机阶段结束：六种尺寸仍然都至少被申请过一次（固定阶段已保证，这里复验） */
+    for (int i = 0; i < 6; i++) {
+        assert(size_hit[i] >= 1);
     }
 
     for (int i = 0; i < 8; i++) {
