@@ -59,9 +59,6 @@ best_fit_alloc_pages(size_t n) {
         if (page->property >= n &&
             (best == NULL || page->property < best->property)) {
             best = page;
-            if (page->property == n) {
-                break;
-            }
         }
     }
 
